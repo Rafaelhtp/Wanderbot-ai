@@ -9,7 +9,7 @@ app.use(express.json());
 app.use(express.static('public'));
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const GEMINI_MODEL = "gemini-1.5-flash";
+const GEMINI_MODEL = "gemini-2.5-flash";
 
 app.post('/api/chat', async (req, res) => {
     const { conversation } = req.body;
@@ -43,10 +43,11 @@ app.post('/api/chat', async (req, res) => {
         
         res.json({ result: response.text() });
 
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: error.message });
-    }
+  // Di index.js bagian POST /api/chat
+} catch (error) {
+    console.error("ERROR GEMINI:", error); // Tambahkan baris ini
+    res.status(500).json({ error: error.message });
+}
 });
 
 const PORT = process.env.PORT || 3000;
