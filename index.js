@@ -1,14 +1,15 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai'; // 1. Import menggunakan GoogleGenAI
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// 2. Inisialisasi client menggunakan pola yang baru
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const GEMINI_MODEL = "gemini-2.5-flash";
 
 app.post('/api/chat', async (req, res) => {
@@ -19,35 +20,37 @@ app.post('/api/chat', async (req, res) => {
             throw new Error('Messages must be an array');
         }
 
-        const model = genAI.getGenerativeModel({ 
-            model: GEMINI_MODEL,
-            // Creative Parameters & System Instruction
-            systemInstruction: "Kamu adalah 'WanderBot', asisten perjalanan yang sangat ahli tentang pariwisata di Indonesia. Gaya bahasamu santai, ramah, dan sering menggunakan emoji ✈️. Berikan rekomendasi destinasi, estimasi budget, dan tips perjalanan yang sangat detail."
-        });
+        // Memisahkan pesan terakhir dari history
+        const lastMessage = conversation[conversation.length - 1].text;
+        
+        // Memformat history sesuai format struktur baru SDK
+        const history = conversation.slice(0, -1).map(msg => ({
+            role: msg.role === 'user' ? 'user' : 'model',
+            parts: [{ text: msg.text }]
+        }));
 
-        const chat = model.startChat({
-            history: conversation.slice(0, -1).map(msg => ({
-                role: msg.role === 'user' ? 'user' : 'model',
-                parts: [{ text: msg.text }],
-            })),
-            generationConfig: {
-                temperature: 0.9, // Kreativitas tinggi untuk saran perjalanan
+        // 3. Membuat sesi chat dengan fungsi ai.chats.create()
+        const chat = ai.chats.create({
+            model: GEMINI_MODEL,
+            config: {
+                systemInstruction: "Kamu adalah 'WanderBot', asisten perjalanan yang sangat ahli tentang pariwisata di Indonesia. Gaya bahasamu santai, ramah, dan sering menggunakan emoji ✈️. Berikan rekomendasi destinasi, estimasi budget, dan tips perjalanan yang sangat detail.",
+                temperature: 0.9,
                 topP: 0.95,
                 topK: 40,
             },
+            history: history
         });
 
-        const lastMessage = conversation[conversation.length - 1].text;
-        const result = await chat.sendMessage(lastMessage);
-        const response = await result.response;
+        // 4. Mengirim pesan menggunakan properti objek { message: ... }
+        const response = await chat.sendMessage({ message: lastMessage });
         
-        res.json({ result: response.text() });
+        // 5. Mengambil teks balasan. Pada SDK baru, .text adalah properti (bukan fungsi .text() lagi)
+        res.json({ result: response.text });
 
-  // Di index.js bagian POST /api/chat
-} catch (error) {
-    console.error("ERROR GEMINI:", error); // Tambahkan baris ini
-    res.status(500).json({ error: error.message });
-}
+    } catch (error) {
+        console.error("ERROR GEMINI:", error);
+        res.status(500).json({ error: error.message });
+    }
 });
 
 const PORT = process.env.PORT || 3000;
